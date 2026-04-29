@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
-import { createInitialGameState, moveSelector, swapSelected } from "@/game/engine";
+import { applyCommand, createInitialGameState } from "@/game/engine";
 import type { ModeConfig } from "@/game/types";
 import { BoardCanvas } from "@/rendering/board-canvas";
 
@@ -23,24 +23,60 @@ export function GameScreen({ mode }: Props) {
         <Metric label="Score" value={state.score} />
         <Metric label="Level" value={state.level} />
         <Metric label="Chain" value={state.maxChain} />
+        <Metric label="Combo" value={state.maxCombo} />
       </View>
 
       <BoardCanvas reservedVerticalSpace={330} state={state} />
 
       <View style={{ flexDirection: "row", gap: 8 }}>
-        <Control label="Left" onPress={() => setState((value) => moveSelector(value, -1, 0))} />
-        <Control label="Right" onPress={() => setState((value) => moveSelector(value, 1, 0))} />
-        <Control label="Up" onPress={() => setState((value) => moveSelector(value, 0, -1))} />
-        <Control label="Down" onPress={() => setState((value) => moveSelector(value, 0, 1))} />
+        <Control
+          label="Left"
+          onPress={() =>
+            setState((value) =>
+              applyCommand(value, { type: "move-selector", columnDelta: -1, rowDelta: 0, tick: value.elapsedTicks + 1 })
+            )
+          }
+        />
+        <Control
+          label="Right"
+          onPress={() =>
+            setState((value) =>
+              applyCommand(value, { type: "move-selector", columnDelta: 1, rowDelta: 0, tick: value.elapsedTicks + 1 })
+            )
+          }
+        />
+        <Control
+          label="Up"
+          onPress={() =>
+            setState((value) =>
+              applyCommand(value, { type: "move-selector", columnDelta: 0, rowDelta: -1, tick: value.elapsedTicks + 1 })
+            )
+          }
+        />
+        <Control
+          label="Down"
+          onPress={() =>
+            setState((value) =>
+              applyCommand(value, { type: "move-selector", columnDelta: 0, rowDelta: 1, tick: value.elapsedTicks + 1 })
+            )
+          }
+        />
       </View>
 
       <View style={{ flexDirection: "row", gap: 8 }}>
-        <Control label="Swap" onPress={() => setState((value) => swapSelected(value))} />
-        <Control label="Raise" onPress={() => setState((value) => ({ ...value, riseOffset: 1 }))} />
+        <Control
+          label="Swap"
+          onPress={() => setState((value) => applyCommand(value, { type: "swap", tick: value.elapsedTicks + 1 }))}
+        />
+        <Control
+          label="Raise"
+          onPress={() => setState((value) => applyCommand(value, { type: "manual-raise", tick: value.elapsedTicks + 1 }))}
+        />
       </View>
 
       <Text selectable testID="game-debug-summary" style={{ color: "#DCC9B7", fontSize: 13 }}>
-        seed {state.seed} | board {state.boardHash} | {mode.automaticRise ? "auto rise" : "manual rise"}
+        seed {state.seed} | phase {state.phase} | time {state.elapsedTicks} | board {state.boardHash} |{" "}
+        {mode.automaticRise ? "auto rise" : "manual rise"}
       </Text>
     </ScrollView>
   );

@@ -48,17 +48,19 @@ export function BoardCanvas({ reservedVerticalSpace = 250, state, showDebugOverl
       <Canvas style={{ height: boardHeight, width: boardWidth }}>
         <Rect x={0} y={0} width={boardWidth} height={boardHeight} color="#2B211A" />
         {state.board.map((row, rowIndex) =>
-          row.map((tile, columnIndex) => (
-            <CardTile
-              key={tile.id}
-              cardGap={cardGap}
-              cardHeight={cardHeight}
-              cardWidth={cardWidth}
-              columnIndex={columnIndex}
-              rowIndex={rowIndex}
-              tile={tile}
-            />
-          ))
+          row.map((tile, columnIndex) =>
+            tile === null ? null : (
+              <CardTile
+                key={tile.id}
+                cardGap={cardGap}
+                cardHeight={cardHeight}
+                cardWidth={cardWidth}
+                columnIndex={columnIndex}
+                rowIndex={rowIndex}
+                tile={tile}
+              />
+            )
+          )
         )}
         <Selector
           cardGap={cardGap}

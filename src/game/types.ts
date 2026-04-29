@@ -5,7 +5,9 @@ export type Tile = {
   suit: Suit;
 };
 
-export type Board = Tile[][];
+export type BoardCell = Tile | null;
+
+export type Board = BoardCell[][];
 
 export type Selector = {
   column: number;
@@ -16,6 +18,7 @@ export type ModeConfig = {
   id: "practice" | "classic";
   visibleColumns: number;
   visibleRows: number;
+  startingStackRows: number;
   automaticRise: boolean;
   relaxedGameOver: boolean;
   startingLevel: number;
@@ -25,7 +28,10 @@ export type ModeConfig = {
 export type GameState = {
   board: Board;
   boardHash: string;
+  elapsedTicks: number;
   level: number;
+  lastResolvedChain: number;
+  lastResolvedCombo: number;
   maxChain: number;
   maxCombo: number;
   mode: ModeConfig;
