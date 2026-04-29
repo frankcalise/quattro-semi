@@ -21,7 +21,7 @@ export const boardLabFixtures: BoardLabFixture[] = [
   {
     id: "clear-edge",
     label: "Clear Edge",
-    note: "Preloads a horizontal Coppe match near the center so Swap can exercise clear resolution.",
+    note: "Default Swap creates one horizontal Coppe match without other starting clears.",
     state: createGameStateFromBoard(practiceMode, "board-lab-clear-edge", createClearEdgeBoard())
   },
   {
@@ -33,58 +33,51 @@ export const boardLabFixtures: BoardLabFixture[] = [
   {
     id: "fall-column",
     label: "Gravity Gap",
-    note: "Starts with floating cards and a gap; press Swap to settle the column and clear the Denari run.",
+    note: "Starts with a column gap; default Swap settles one Denari into a bottom-row clear.",
     state: createGameStateFromBoard(practiceMode, "board-lab-fall-column", createFallColumnBoard())
   }
 ];
 
 function createClearEdgeBoard(): Board {
-  return createPatternBoard((row, column) => {
-    if (row < 5) {
-      return null;
-    }
+  const board = createNoMatchBoard(5);
 
-    if (row === 8 && column >= 2 && column <= 4) {
-      return "coppe";
-    }
+  board[9][0] = createFixtureTile(9, 0, "coppe");
+  board[9][1] = createFixtureTile(9, 1, "coppe");
+  board[9][2] = createFixtureTile(9, 2, "denari");
+  board[9][3] = createFixtureTile(9, 3, "coppe");
 
-    return suits[(row + column * 2) % suits.length];
-  });
+  return board;
 }
 
 function createDangerRiseBoard(): Board {
-  return createPatternBoard((row, column) => {
-    if (row < 2) {
-      return column % 2 === 0 ? "spade" : null;
-    }
-
-    return suits[(row * 2 + column) % suits.length];
-  });
+  return createNoMatchBoard(0);
 }
 
 function createFallColumnBoard(): Board {
-  return createPatternBoard((row, column) => {
-    if (row < 4) {
-      return null;
-    }
+  const board = createNoMatchBoard(4);
 
-    if (column === 2 && row >= 7 && row <= 9) {
-      return null;
-    }
+  board[8][2] = createFixtureTile(8, 2, "denari");
+  board[9][2] = createFixtureTile(9, 2, "bastoni");
+  board[9][3] = null;
+  board[10][2] = null;
+  board[11][0] = createFixtureTile(11, 0, "bastoni");
+  board[11][1] = createFixtureTile(11, 1, "denari");
+  board[11][2] = null;
+  board[11][3] = createFixtureTile(11, 3, "denari");
+  board[11][4] = createFixtureTile(11, 4, "spade");
 
-    if (row === 10 && column >= 1 && column <= 3) {
-      return "denari";
-    }
-
-    return suits[(row + column) % suits.length];
-  });
+  return board;
 }
 
-function createPatternBoard(suitForCell: (row: number, column: number) => Suit | null): Board {
+function createNoMatchBoard(emptyRows: number): Board {
   return Array.from({ length: practiceMode.visibleRows }, (_, row) =>
     Array.from({ length: practiceMode.visibleColumns }, (_, column) => {
-      const suit = suitForCell(row, column);
-      return suit === null ? null : createFixtureTile(row, column, suit);
+      if (row < emptyRows) {
+        return null;
+      }
+
+      const suit = suits[(row + column) % suits.length];
+      return createFixtureTile(row, column, suit);
     })
   );
 }
