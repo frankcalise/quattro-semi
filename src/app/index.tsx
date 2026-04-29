@@ -1,7 +1,9 @@
 import { Link } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
-const modes = [
+import { areDebugRoutesEnabled } from "@/debug/debug-routes";
+
+const playModes = [
   {
     title: "Practice",
     body: "Learn swaps, chains, and manual raise without automatic pressure.",
@@ -11,7 +13,10 @@ const modes = [
     title: "Classic",
     body: "Endless score attack with rising pressure and deterministic rules.",
     href: "/classic"
-  },
+  }
+] as const;
+
+const debugModes = [
   {
     title: "Board Lab",
     body: "Inspect the first Skia board, selector, seed, and debug summary.",
@@ -20,6 +25,8 @@ const modes = [
 ] as const;
 
 export default function HomeScreen() {
+  const modes = areDebugRoutesEnabled() ? [...playModes, ...debugModes] : playModes;
+
   return (
     <ScrollView
       contentInsetAdjustmentBehavior="automatic"

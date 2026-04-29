@@ -2,3 +2,12 @@ appId: com.quattrosemi.game
 ---
 - launchApp
 - assertVisible: "Quattro Semi"
+- tapOn:
+    id: "home-link-board-lab"
+- assertVisible:
+    id: "board-lab-summary"
+- assertVisible: "seed practice:board-lab"
+- assertVisible: "phase playing"
+- tapOn:
+    id: "board-lab-swap"
+- assertVisible: "animation swap"

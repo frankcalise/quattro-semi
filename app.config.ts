@@ -32,7 +32,8 @@ const config: ExpoConfig = {
     ]
   ],
   extra: {
-    enableDebugRoutes: process.env.EXPO_PUBLIC_ENABLE_DEBUG_ROUTES !== "false"
+    enableDebugRoutes:
+      process.env.EXPO_PUBLIC_ENABLE_DEBUG_ROUTES === "true" || process.env.NODE_ENV !== "production"
   }
 };
 
