@@ -3,6 +3,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 
 import { applyCommand, createInitialGameState } from "@/game/engine";
 import { practiceMode } from "@/game/modes";
+import { formatGameSummary, summarizeGameState } from "@/game/replay";
 import { BoardCanvas } from "@/rendering/board-canvas";
 
 export function BoardLabScreen() {
@@ -69,8 +70,7 @@ export function BoardLabScreen() {
       </View>
 
       <Text selectable testID="board-lab-summary" style={{ color: "#D8C2AB", fontSize: 13 }}>
-        phase {state.phase} | selected {state.selector.column},{state.selector.row} | score {state.score} | hash{" "}
-        {state.boardHash}
+        {formatGameSummary(summarizeGameState(state))}
       </Text>
     </ScrollView>
   );

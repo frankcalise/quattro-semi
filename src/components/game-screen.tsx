@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
 import { applyCommand, createInitialGameState } from "@/game/engine";
+import { formatGameSummary, summarizeGameState } from "@/game/replay";
 import type { ModeConfig } from "@/game/types";
 import { BoardCanvas } from "@/rendering/board-canvas";
 
@@ -75,8 +76,7 @@ export function GameScreen({ mode }: Props) {
       </View>
 
       <Text selectable testID="game-debug-summary" style={{ color: "#DCC9B7", fontSize: 13 }}>
-        seed {state.seed} | phase {state.phase} | time {state.elapsedTicks} | board {state.boardHash} |{" "}
-        {mode.automaticRise ? "auto rise" : "manual rise"}
+        {formatGameSummary(summarizeGameState(state))} | {mode.automaticRise ? "auto rise" : "manual rise"}
       </Text>
     </ScrollView>
   );
