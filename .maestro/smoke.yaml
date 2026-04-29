@@ -1,0 +1,4 @@
+appId: com.quattrosemi.game
+---
+- launchApp
+- assertVisible: "Quattro Semi"
