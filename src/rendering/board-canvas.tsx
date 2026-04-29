@@ -4,17 +4,25 @@ import { Text, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
 
-import type { GameState, Suit, Tile } from "@/game/types";
+import type { Board, GameState, Selector, Suit, Tile } from "@/game/types";
 
 type Props = {
   animationKey?: number;
-  animationType?: "move" | "swap" | "raise" | "fixture";
+  animationType?: BoardAnimationType;
   onCellPress?: (column: number, row: number) => void;
   onFrameSample?: (fps: number) => void;
   onSwipe?: (columnDelta: number, rowDelta: number) => void;
+  previousState?: GameState | null;
   reservedVerticalSpace?: number;
   state: GameState;
   showDebugOverlay?: boolean;
+};
+
+export type BoardAnimationType = "move" | "swap" | "raise" | "fixture" | "settle" | "clear";
+
+type CellPosition = {
+  column: number;
+  row: number;
 };
 
 const suitColors: Record<Suit, string> = {
@@ -30,6 +38,7 @@ export function BoardCanvas({
   onCellPress,
   onFrameSample,
   onSwipe,
+  previousState = null,
   reservedVerticalSpace = 250,
   state,
   showDebugOverlay = false
@@ -160,8 +169,18 @@ export function BoardCanvas({
   }, [onFrameSample]);
   const easedProgress = 1 - Math.pow(1 - animationProgress, 3);
   const riseShift = animationType === "raise" ? (1 - easedProgress) * (cardHeight + cardGap) * 0.18 : 0;
-  const selectorPulse = animationType === "swap" ? 1 - easedProgress : 0;
+  const selectorPulse = animationType === "swap" || animationType === "clear" ? 1 - easedProgress : 0;
   const isDangerVisible = state.board.slice(0, 2).some((row) => row.some(Boolean));
+  const previousPositions = useMemo(() => mapTilePositions(previousState?.board), [previousState?.board]);
+  const currentPositions = useMemo(() => mapTilePositions(state.board), [state.board]);
+  const clearingTiles = useMemo(() => {
+    if (!previousState || animationType === "move" || animationType === "fixture") {
+      return [];
+    }
+
+    return collectClearingTiles(previousState.board, currentPositions);
+  }, [animationType, currentPositions, previousState]);
+  const previousSelector = previousState?.selector;
 
   return (
     <View
@@ -193,7 +212,9 @@ export function BoardCanvas({
                     cardHeight={cardHeight}
                     cardWidth={cardWidth}
                     columnIndex={columnIndex}
+                    progress={easedProgress}
                     pulse={selectorPulse}
+                    previousPosition={previousPositions.get(tile.id)}
                     rowIndex={rowIndex}
                     selected={rowIndex === state.selector.row && (columnIndex === state.selector.column || columnIndex === state.selector.column + 1)}
                     tile={tile}
@@ -201,6 +222,17 @@ export function BoardCanvas({
                 )
               )
             )}
+            {clearingTiles.map((clearingTile) => (
+              <ClearingCardTile
+                key={`clear:${clearingTile.tile.id}`}
+                cardGap={cardGap}
+                cardHeight={cardHeight}
+                cardWidth={cardWidth}
+                progress={easedProgress}
+                tile={clearingTile.tile}
+                position={clearingTile.position}
+              />
+            ))}
           </Group>
           <Selector
             cardGap={cardGap}
@@ -208,6 +240,8 @@ export function BoardCanvas({
             cardWidth={cardWidth}
             column={state.selector.column}
             pulse={selectorPulse}
+            previousSelector={previousSelector}
+            progress={easedProgress}
             row={state.selector.row}
           />
           {showDebugOverlay ? <Rect x={8} y={8} width={boardWidth * 0.45} height={5} color="#FFF5E8" opacity={0.65} /> : null}
@@ -246,16 +280,33 @@ type CardProps = {
   cardHeight: number;
   cardWidth: number;
   columnIndex: number;
+  previousPosition?: CellPosition;
+  progress: number;
   pulse: number;
   rowIndex: number;
   selected: boolean;
   tile: Tile;
 };
 
-function CardTile({ cardGap, cardHeight, cardWidth, columnIndex, pulse, rowIndex, selected, tile }: CardProps) {
+function CardTile({
+  cardGap,
+  cardHeight,
+  cardWidth,
+  columnIndex,
+  previousPosition,
+  progress,
+  pulse,
+  rowIndex,
+  selected,
+  tile
+}: CardProps) {
   const selectedLift = selected ? pulse * 4 : 0;
-  const x = columnIndex * (cardWidth + cardGap);
-  const y = rowIndex * (cardHeight + cardGap) - selectedLift;
+  const targetX = columnIndex * (cardWidth + cardGap);
+  const targetY = rowIndex * (cardHeight + cardGap);
+  const sourceX = previousPosition ? previousPosition.column * (cardWidth + cardGap) : targetX;
+  const sourceY = previousPosition ? previousPosition.row * (cardHeight + cardGap) : targetY + cardHeight + cardGap;
+  const x = sourceX + (targetX - sourceX) * progress;
+  const y = sourceY + (targetY - sourceY) * progress - selectedLift;
   const centerX = x + cardWidth / 2;
   const centerY = y + cardHeight / 2;
 
@@ -277,12 +328,56 @@ function CardTile({ cardGap, cardHeight, cardWidth, columnIndex, pulse, rowIndex
   );
 }
 
+function ClearingCardTile({
+  cardGap,
+  cardHeight,
+  cardWidth,
+  position,
+  progress,
+  tile
+}: {
+  cardGap: number;
+  cardHeight: number;
+  cardWidth: number;
+  position: CellPosition;
+  progress: number;
+  tile: Tile;
+}) {
+  const fade = 1 - progress;
+  const inset = progress * cardWidth * 0.08;
+  const x = position.column * (cardWidth + cardGap) + inset;
+  const y = position.row * (cardHeight + cardGap) + inset;
+  const width = cardWidth - inset * 2;
+  const height = cardHeight - inset * 2;
+  const centerX = x + width / 2;
+  const centerY = y + height / 2;
+
+  return (
+    <Group opacity={fade}>
+      <RoundedRect x={x} y={y} width={width} height={height} r={6} color="#FFF0CE" />
+      <RoundedRect
+        x={x + 3}
+        y={y + 3}
+        width={width - 6}
+        height={height - 6}
+        r={4}
+        color="#FFE08A"
+        style="stroke"
+        strokeWidth={2}
+      />
+      <SuitMark x={centerX} y={centerY} size={cardWidth * 0.34 * (1 - progress * 0.12)} suit={tile.suit} />
+    </Group>
+  );
+}
+
 function Selector({
   cardGap,
   cardHeight,
   cardWidth,
   column,
   pulse,
+  previousSelector,
+  progress,
   row
 }: {
   cardGap: number;
@@ -290,12 +385,21 @@ function Selector({
   cardWidth: number;
   column: number;
   pulse: number;
+  previousSelector?: Selector;
+  progress: number;
   row: number;
 }) {
+  const targetX = column * (cardWidth + cardGap);
+  const targetY = row * (cardHeight + cardGap);
+  const sourceX = previousSelector ? previousSelector.column * (cardWidth + cardGap) : targetX;
+  const sourceY = previousSelector ? previousSelector.row * (cardHeight + cardGap) : targetY;
+  const x = sourceX + (targetX - sourceX) * progress;
+  const y = sourceY + (targetY - sourceY) * progress;
+
   return (
     <RoundedRect
-      x={column * (cardWidth + cardGap) - 2 - pulse * 2}
-      y={row * (cardHeight + cardGap) - 2 - pulse * 2}
+      x={x - 2 - pulse * 2}
+      y={y - 2 - pulse * 2}
       width={cardWidth * 2 + cardGap + 4 + pulse * 4}
       height={cardHeight + 4 + pulse * 4}
       r={8}
@@ -304,6 +408,37 @@ function Selector({
       strokeWidth={3}
     />
   );
+}
+
+function mapTilePositions(board?: Board) {
+  const positions = new Map<string, CellPosition>();
+
+  board?.forEach((row, rowIndex) => {
+    row.forEach((tile, columnIndex) => {
+      if (tile) {
+        positions.set(tile.id, { column: columnIndex, row: rowIndex });
+      }
+    });
+  });
+
+  return positions;
+}
+
+function collectClearingTiles(board: Board, currentPositions: Map<string, CellPosition>) {
+  const clearingTiles: Array<{ position: CellPosition; tile: Tile }> = [];
+
+  board.forEach((row, rowIndex) => {
+    row.forEach((tile, columnIndex) => {
+      if (tile && !currentPositions.has(tile.id)) {
+        clearingTiles.push({
+          position: { column: columnIndex, row: rowIndex },
+          tile
+        });
+      }
+    });
+  });
+
+  return clearingTiles;
 }
 
 function SuitMark({ size, suit, x, y }: { size: number; suit: Suit; x: number; y: number }) {
