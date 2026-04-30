@@ -13,6 +13,7 @@ export function BoardLabScreen() {
   const [previousState, setPreviousState] = useState<GameState | null>(null);
   const [fixtureId, setFixtureId] = useState(initialFixture.id);
   const [fps, setFps] = useState(0);
+  const [frameMs, setFrameMs] = useState(0);
   const [gestureLatency, setGestureLatency] = useState(0);
   const [animationKey, setAnimationKey] = useState(0);
   const [animationType, setAnimationType] = useState<BoardAnimationType>("fixture");
@@ -72,6 +73,10 @@ export function BoardLabScreen() {
     },
     [commitAnimation, state]
   );
+  const recordFrameSample = useCallback((nextFps: number, nextFrameMs: number) => {
+    setFps(nextFps);
+    setFrameMs(nextFrameMs);
+  }, []);
 
   return (
     <ScrollView
@@ -79,11 +84,17 @@ export function BoardLabScreen() {
       style={{ flex: 1, backgroundColor: "#181210" }}
       contentContainerStyle={{ padding: 16, gap: 14 }}
     >
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        <DebugChip testID="board-lab-seed" label={`seed ${summary.seed}`} />
+        <DebugChip testID="board-lab-phase" label={`phase ${summary.phase}`} />
+        <DebugChip testID="board-lab-frame" label={`frame ${frameMs}ms`} />
+      </View>
+
       <BoardCanvas
         animationKey={animationKey}
         animationType={animationType}
         onCellPress={moveSelectorToCell}
-        onFrameSample={setFps}
+        onFrameSample={recordFrameSample}
         onSwipe={(columnDelta, rowDelta) => applyMove(columnDelta, rowDelta)}
         previousState={previousState}
         reservedVerticalSpace={330}
@@ -122,10 +133,38 @@ export function BoardLabScreen() {
         />
       </View>
 
+      <DebugChip testID={`board-lab-animation-${animationType}`} label={`animation ${animationType}`} />
+
       <Text selectable testID="board-lab-summary" style={{ color: "#D8C2AB", fontSize: 13 }}>
-        {formatGameSummary(summary)} | fixture {fixtureId} | fps {fps} | latency {gestureLatency}ms | animation {animationType}
+        {formatGameSummary(summary)} | fixture {fixtureId} | fps {fps} | frame {frameMs}ms | latency{" "}
+        {gestureLatency}ms | animation {animationType}
       </Text>
     </ScrollView>
+  );
+}
+
+function DebugChip({ label, testID }: { label: string; testID: string }) {
+  return (
+    <Text
+      selectable
+      testID={testID}
+      style={{
+        backgroundColor: "#2C211A",
+        borderColor: "#5E4636",
+        borderRadius: 8,
+        borderWidth: 1,
+        color: "#F7E7D3",
+        flexGrow: 1,
+        fontSize: 12,
+        fontVariant: ["tabular-nums"],
+        fontWeight: "700",
+        minHeight: 34,
+        paddingHorizontal: 10,
+        paddingVertical: 8
+      }}
+    >
+      {label}
+    </Text>
   );
 }
 

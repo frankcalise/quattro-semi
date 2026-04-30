@@ -10,7 +10,7 @@ type Props = {
   animationKey?: number;
   animationType?: BoardAnimationType;
   onCellPress?: (column: number, row: number) => void;
-  onFrameSample?: (fps: number) => void;
+  onFrameSample?: (fps: number, frameMs: number) => void;
   onSwipe?: (columnDelta: number, rowDelta: number) => void;
   previousState?: GameState | null;
   reservedVerticalSpace?: number;
@@ -45,6 +45,7 @@ export function BoardCanvas({
 }: Props) {
   const { height, width } = useWindowDimensions();
   const [animationProgress, setAnimationProgress] = useState(1);
+  const [frameStats, setFrameStats] = useState({ fps: 0, frameMs: 0 });
   const frameCount = useRef(0);
   const lastFrameSample = useRef(Date.now());
   const cardGap = 4;
@@ -136,12 +137,15 @@ export function BoardCanvas({
   }, [animationKey]);
 
   useEffect(() => {
-    if (!onFrameSample) {
+    if (!onFrameSample && !showDebugOverlay) {
       return;
     }
 
     let frame = 0;
     let mounted = true;
+    frameCount.current = 0;
+    lastFrameSample.current = Date.now();
+
     const tick = () => {
       if (!mounted) {
         return;
@@ -152,7 +156,11 @@ export function BoardCanvas({
       const elapsed = now - lastFrameSample.current;
 
       if (elapsed >= 600) {
-        onFrameSample(Math.round((frameCount.current / elapsed) * 1000));
+        const fps = Math.round((frameCount.current / elapsed) * 1000);
+        const frameMs = Math.round((elapsed / frameCount.current) * 10) / 10;
+
+        setFrameStats({ fps, frameMs });
+        onFrameSample?.(fps, frameMs);
         frameCount.current = 0;
         lastFrameSample.current = now;
       }
@@ -166,7 +174,7 @@ export function BoardCanvas({
       mounted = false;
       cancelAnimationFrame(frame);
     };
-  }, [onFrameSample]);
+  }, [onFrameSample, showDebugOverlay]);
   const easedProgress = 1 - Math.pow(1 - animationProgress, 3);
   const riseShift = animationType === "raise" ? (1 - easedProgress) * (cardHeight + cardGap) * 0.18 : 0;
   const selectorPulse = animationType === "swap" || animationType === "clear" ? 1 - easedProgress : 0;
@@ -262,13 +270,18 @@ export function BoardCanvas({
             fontVariant: ["tabular-nums"],
             fontWeight: "700",
             left: 14,
+            lineHeight: 15,
+            maxWidth: boardWidth - 28,
             paddingHorizontal: 8,
             paddingVertical: 5,
             position: "absolute",
             top: 14
           }}
         >
-          {state.mode.visibleColumns}x{state.mode.visibleRows} seed {state.seed}
+          {state.mode.visibleColumns}x{state.mode.visibleRows} | phase {state.phase} | score {state.score} | selector{" "}
+          {state.selector.column},{state.selector.row}{"\n"}
+          seed {state.seed} | board {state.boardHash}{"\n"}
+          fps {frameStats.fps} | frame {frameStats.frameMs}ms
         </Text>
       ) : null}
     </View>
