@@ -2,7 +2,7 @@ import { Canvas, Group, Path, Rect, RoundedRect, Skia } from "@shopify/react-nat
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Text, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { runOnJS } from "react-native-reanimated";
+import { Easing, runOnJS, useAnimatedReaction, useSharedValue, withTiming } from "react-native-reanimated";
 
 import type { Board, GameState, Selector, Suit, Tile } from "@/game/types";
 
@@ -46,6 +46,7 @@ export function BoardCanvas({
   const { height, width } = useWindowDimensions();
   const [animationProgress, setAnimationProgress] = useState(1);
   const [frameStats, setFrameStats] = useState({ fps: 0, frameMs: 0 });
+  const progressValue = useSharedValue(1);
   const frameCount = useRef(0);
   const lastFrameSample = useRef(Date.now());
   const cardGap = 4;
@@ -110,31 +111,20 @@ export function BoardCanvas({
   const composedGesture = useMemo(() => Gesture.Exclusive(panGesture, tapGesture), [panGesture, tapGesture]);
 
   useEffect(() => {
-    let frame = 0;
-    let mounted = true;
-    const startedAt = Date.now();
+    progressValue.value = 0;
+    progressValue.value = withTiming(1, {
+      duration: 220,
+      easing: Easing.out(Easing.cubic)
+    });
+  }, [animationKey, progressValue]);
 
-    const tick = () => {
-      if (!mounted) {
-        return;
-      }
-
-      const elapsed = Date.now() - startedAt;
-      setAnimationProgress(Math.min(1, elapsed / 220));
-
-      if (elapsed < 240) {
-        frame = requestAnimationFrame(tick);
-      }
-    };
-
-    setAnimationProgress(0);
-    frame = requestAnimationFrame(tick);
-
-    return () => {
-      mounted = false;
-      cancelAnimationFrame(frame);
-    };
-  }, [animationKey]);
+  useAnimatedReaction(
+    () => progressValue.value,
+    (progress) => {
+      runOnJS(setAnimationProgress)(progress);
+    },
+    [progressValue]
+  );
 
   useEffect(() => {
     if (!onFrameSample && !showDebugOverlay) {

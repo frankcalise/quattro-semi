@@ -1,11 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { AppState, Pressable, ScrollView, Text, View } from "react-native";
 
+import { configureAudio, playSfx, setSfxActive, setSfxEnabled } from "@/audio/audio-service";
 import { applyCommand, createInitialGameState, getAutomaticRiseIntervalTicks } from "@/game/engine";
+import { deriveFeedbackEvents, primaryAnimationForEvents } from "@/game/feedback";
 import { formatGameSummary, summarizeGameState } from "@/game/replay";
 import type { GameState, ModeConfig } from "@/game/types";
+import { playHaptic, setHapticsEnabled } from "@/haptics/haptic-service";
 import type { InputCommand } from "@/input/commands";
-import { BoardCanvas } from "@/rendering/board-canvas";
+import { BoardCanvas, type BoardAnimationType } from "@/rendering/board-canvas";
+import {
+  defaultGameFeelSettings,
+  loadGameFeelSettings,
+  saveGameFeelSettings,
+  type GameFeelSettings
+} from "@/settings/game-feel-settings";
 import { emptyLocalRecords, mergeLocalRecords } from "@/storage/local-records";
 
 type Props = {
@@ -15,14 +24,71 @@ type Props = {
 export function GameScreen({ mode }: Props) {
   const initialState = useMemo(() => createInitialGameState(mode, "quattro-semi"), [mode]);
   const [state, setState] = useState(initialState);
+  const [previousBoardState, setPreviousBoardState] = useState<GameState | null>(null);
+  const [animationKey, setAnimationKey] = useState(0);
+  const [animationType, setAnimationType] = useState<BoardAnimationType>("fixture");
   const [records, setRecords] = useState(emptyLocalRecords);
+  const [settings, setSettings] = useState<GameFeelSettings>(defaultGameFeelSettings);
   const recordedGameOverHash = useRef<string | null>(null);
   const automaticRiseInterval = getAutomaticRiseIntervalTicks(mode, state.level);
 
   useEffect(() => {
     setState(initialState);
+    setPreviousBoardState(null);
+    setAnimationType("fixture");
+    setAnimationKey((value) => value + 1);
     recordedGameOverHash.current = null;
   }, [initialState]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    void configureAudio();
+    void loadGameFeelSettings().then((loadedSettings) => {
+      if (!mounted) {
+        return;
+      }
+
+      setSettings(loadedSettings);
+      setSfxEnabled(loadedSettings.audioEnabled);
+      setHapticsEnabled(loadedSettings.hapticsEnabled);
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    setSfxEnabled(settings.audioEnabled);
+    setHapticsEnabled(settings.hapticsEnabled);
+    void saveGameFeelSettings(settings);
+  }, [settings]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      const active = nextAppState === "active";
+
+      setSfxActive(active);
+      setState((value) => {
+        if (!mode.automaticRise || value.phase === "game-over") {
+          return value;
+        }
+
+        if (!active && value.phase === "playing") {
+          return { ...value, phase: "paused" };
+        }
+
+        if (active && value.phase === "paused") {
+          return { ...value, phase: "playing" };
+        }
+
+        return value;
+      });
+    });
+
+    return () => subscription.remove();
+  }, [mode.automaticRise]);
 
   useEffect(() => {
     if (!mode.automaticRise || state.phase !== "playing") {
@@ -55,10 +121,26 @@ export function GameScreen({ mode }: Props) {
 
   const restart = () => {
     recordedGameOverHash.current = null;
+    setPreviousBoardState(null);
+    setAnimationType("fixture");
+    setAnimationKey((value) => value + 1);
     setState(createInitialGameState(mode, `quattro-semi-${Date.now()}`));
   };
   const dispatchCommand = (createCommand: (tick: number) => InputCommand) => {
-    setState((value) => applyCommand(value, createCommand(value.elapsedTicks + 1)));
+    setState((value) => {
+      const command = createCommand(value.elapsedTicks + 1);
+      const next = applyCommand(value, command);
+      const events = deriveFeedbackEvents(value, next, command);
+
+      if (events.length > 0) {
+        setPreviousBoardState(value);
+        setAnimationType(primaryAnimationForEvents(events));
+        setAnimationKey((key) => key + 1);
+        playFeedback(events);
+      }
+
+      return next;
+    });
   };
   const moveSelectorBy = (columnDelta: number, rowDelta: number) => {
     dispatchCommand((tick) => ({ type: "move-selector", columnDelta, rowDelta, tick }));
@@ -100,11 +182,30 @@ export function GameScreen({ mode }: Props) {
       </View>
 
       <BoardCanvas
+        animationKey={animationKey}
+        animationType={animationType}
         onCellPress={handleBoardCellPress}
         onSwipe={moveSelectorBy}
+        previousState={previousBoardState}
         reservedVerticalSpace={260}
         state={state}
       />
+
+      {state.phase === "paused" ? (
+        <View
+          style={{
+            backgroundColor: "#2C211A",
+            borderColor: "#6B5140",
+            borderRadius: 8,
+            borderWidth: 1,
+            padding: 12
+          }}
+        >
+          <Text selectable style={{ color: "#FFF3E2", fontSize: 16, fontWeight: "800" }}>
+            Paused
+          </Text>
+        </View>
+      ) : null}
 
       {state.phase === "game-over" ? (
         <ResultsPanel records={records} restart={restart} state={state} />
@@ -139,11 +240,31 @@ export function GameScreen({ mode }: Props) {
         </>
       )}
 
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <Toggle
+          enabled={settings.audioEnabled}
+          label="Audio"
+          onPress={() => setSettings((value) => ({ ...value, audioEnabled: !value.audioEnabled }))}
+        />
+        <Toggle
+          enabled={settings.hapticsEnabled}
+          label="Haptics"
+          onPress={() => setSettings((value) => ({ ...value, hapticsEnabled: !value.hapticsEnabled }))}
+        />
+      </View>
+
       <Text selectable testID="game-debug-summary" style={{ color: "#DCC9B7", fontSize: 13 }}>
         {formatGameSummary(summarizeGameState(state))} | {mode.automaticRise ? "auto rise" : "manual rise"}
       </Text>
     </ScrollView>
   );
+}
+
+function playFeedback(events: ReturnType<typeof deriveFeedbackEvents>) {
+  for (const event of events) {
+    playSfx(event);
+    playHaptic(event);
+  }
 }
 
 function ResultsPanel({
@@ -234,6 +355,31 @@ function Control({ label, onPress }: { label: string; onPress: () => void }) {
     >
       <Text selectable={false} style={{ color: "#FFF6EA", fontSize: 15, fontWeight: "700" }}>
         {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function Toggle({ enabled, label, onPress }: { enabled: boolean; label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityState={{ checked: enabled }}
+      testID={`toggle-${label.toLowerCase()}`}
+      onPress={onPress}
+      style={{
+        alignItems: "center",
+        backgroundColor: enabled ? "#3E7F4A" : "#4A4039",
+        borderColor: enabled ? "#7FC48A" : "#6B5140",
+        borderRadius: 8,
+        borderWidth: 1,
+        flex: 1,
+        minHeight: 44,
+        justifyContent: "center"
+      }}
+    >
+      <Text selectable={false} style={{ color: "#FFF6EA", fontSize: 14, fontWeight: "800" }}>
+        {label} {enabled ? "On" : "Off"}
       </Text>
     </Pressable>
   );
