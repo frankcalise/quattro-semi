@@ -178,10 +178,30 @@ function pickLegalSuit(generated: Tile[], existingRows: Board, row: number, colu
 }
 
 function advanceTimer(state: GameState, tick: number): GameState {
-  return {
+  const previousTick = state.elapsedTicks;
+  const elapsedTicks = Math.max(previousTick, tick);
+  const ticked = {
     ...state,
-    elapsedTicks: Math.max(state.elapsedTicks, tick)
+    elapsedTicks
   };
+
+  if (!state.mode.automaticRise || state.phase !== "playing") {
+    return ticked;
+  }
+
+  const interval = getAutomaticRiseIntervalTicks(state.mode, state.level);
+  const previousRiseCount = Math.floor(previousTick / interval);
+  const nextRiseCount = Math.floor(elapsedTicks / interval);
+  const rowsDue = Math.max(0, nextRiseCount - previousRiseCount);
+
+  return rowsDue > 0 ? raiseRows(ticked, rowsDue) : ticked;
+}
+
+export function getAutomaticRiseIntervalTicks(mode: ModeConfig, level: number) {
+  return Math.max(
+    mode.automaticRiseMinimumTicks,
+    mode.automaticRiseBaseTicks - Math.max(0, level - mode.startingLevel) * mode.automaticRiseLevelStepTicks
+  );
 }
 
 function resolveBoard(state: GameState, settleFirst = false): GameState {

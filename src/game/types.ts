@@ -20,6 +20,9 @@ export type ModeConfig = {
   visibleRows: number;
   startingStackRows: number;
   automaticRise: boolean;
+  automaticRiseBaseTicks: number;
+  automaticRiseLevelStepTicks: number;
+  automaticRiseMinimumTicks: number;
   relaxedGameOver: boolean;
   startingLevel: number;
   seedSalt: string;

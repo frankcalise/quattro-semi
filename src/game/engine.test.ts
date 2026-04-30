@@ -2,6 +2,7 @@ import {
   applyCommand,
   createGameStateFromBoard,
   createInitialGameState,
+  getAutomaticRiseIntervalTicks,
   moveSelector,
   raiseRows,
   replayCommands,
@@ -154,6 +155,25 @@ describe("engine core", () => {
     const state = createGameStateFromBoard(compactMode, "relaxed", board);
 
     expect(applyCommand(state, { type: "manual-raise", tick: 1 }).phase).toBe("playing");
+  });
+
+  it("automatically raises classic rows as elapsed ticks cross the configured interval", () => {
+    const mode = { ...classicMode, automaticRiseBaseTicks: 3, automaticRiseLevelStepTicks: 1, automaticRiseMinimumTicks: 2 };
+    const state = createInitialGameState(mode, "auto-rise");
+    const beforeThreshold = applyCommand(state, { type: "move-selector", columnDelta: 0, rowDelta: 0, tick: 2 });
+    const atThreshold = applyCommand(beforeThreshold, { type: "move-selector", columnDelta: 0, rowDelta: 0, tick: 3 });
+
+    expect(beforeThreshold.riseOffset).toBe(0);
+    expect(atThreshold.riseOffset).toBe(1);
+    expect(atThreshold.elapsedTicks).toBe(3);
+  });
+
+  it("increases automatic pressure by shortening the rise interval with level", () => {
+    const mode = { ...classicMode, automaticRiseBaseTicks: 12, automaticRiseLevelStepTicks: 2, automaticRiseMinimumTicks: 5 };
+
+    expect(getAutomaticRiseIntervalTicks(mode, 1)).toBe(12);
+    expect(getAutomaticRiseIntervalTicks(mode, 3)).toBe(8);
+    expect(getAutomaticRiseIntervalTicks(mode, 10)).toBe(5);
   });
 });
 
